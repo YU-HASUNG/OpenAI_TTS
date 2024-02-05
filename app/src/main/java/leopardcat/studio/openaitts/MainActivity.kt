@@ -9,15 +9,21 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.hilt.navigation.compose.hiltViewModel
+import dagger.hilt.android.AndroidEntryPoint
 import leopardcat.studio.openaitts.ui.theme.OpenAITTSTheme
+import leopardcat.studio.openaitts.viewmodel.MainViewModel
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             OpenAITTSTheme {
-                // A surface container using the 'background' color from the theme
+                val mainViewModel = hiltViewModel<MainViewModel>()
+                mainViewModel.makeAudio(this) //오디오 다운로드 및 재생
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -35,12 +41,4 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
         text = "Hello $name!",
         modifier = modifier
     )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    OpenAITTSTheme {
-        Greeting("Android")
-    }
 }
