@@ -30,21 +30,21 @@ class MainViewModel @javax.inject.Inject constructor(
     private var mediaPlayer: MediaPlayer? = null
 
     //오디오 다운로드 및 재생
-    fun makeAudio(context: Context) {
+    fun makeAudio(context: Context, text: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val destinationFile = File(context.getExternalFilesDir(null), "speech.mp3")
-            downloadAudioFile(destinationFile)
+            downloadAudioFile(destinationFile, text)
         }
     }
 
-    private suspend fun downloadAudioFile(destination: File) {
+    private suspend fun downloadAudioFile(destination: File, text: String) {
         val audioResponse = gptAudioRepository.getGPTAudio(
             apiKey,
             "application/json",
             createGPTAudioRequestBody(
                 GPTAudioRequest(
                     "tts-1",
-                    "HI Let's start TTS Test",
+                    text,
                     "alloy",
                     "aac",
                     0.6f
