@@ -2,6 +2,7 @@ package leopardcat.studio.openaitts
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -39,7 +40,7 @@ import leopardcat.studio.openaitts.voicetotext.VoiceToTextParser
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    val voiceToTextParser by lazy {
+    private val voiceToTextParser by lazy {
         VoiceToTextParser(application)
     }
 
@@ -68,6 +69,13 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val state by voiceToTextParser.state.collectAsState()
+
+                LaunchedEffect(state.spokenText) {
+                    if (state.spokenText.isNotEmpty()) {
+                        Log.d("hasung", "send message : ${state.spokenText}")
+                        mainViewModel.makeAudio(this@MainActivity, state.spokenText)//오디오 다운로드 및 재생
+                    }
+                }
 
                 Scaffold(
                     floatingActionButton = {
@@ -103,9 +111,6 @@ class MainActivity : ComponentActivity() {
                                 Text(text = "Speaking...")
                             } else {
                                 Text(text = state.spokenText.ifEmpty { "Click on mic to record audio" })
-                                if(state.spokenText.isNotEmpty()) {
-                                    mainViewModel.makeAudio(this@MainActivity, state.spokenText)//오디오 다운로드 및 재생
-                                }
                             }
                         }
                     }

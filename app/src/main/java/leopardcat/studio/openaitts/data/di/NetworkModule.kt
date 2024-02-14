@@ -6,6 +6,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import leopardcat.studio.openaitts.data.source.GPTAudioService
+import leopardcat.studio.openaitts.data.source.GPTChatService
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -19,7 +20,8 @@ import javax.inject.Singleton
 class NetworkModule {
 
     companion object {
-        private const val BASE_URL = "https://api.openai.com/v1/audio/"
+        private const val AUDIO_URL = "https://api.openai.com/v1/audio/"
+        private const val CHAT_URL = "https://api.openai.com/v1/chat/"
     }
 
     @Provides
@@ -57,11 +59,24 @@ class NetworkModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(
+    @Named("Audio")
+    fun provideRetrofitAudio(
         okHttpClient: OkHttpClient,
         gsonConverterFactory: GsonConverterFactory
     ): Retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
+        .baseUrl(AUDIO_URL)
+        .client(okHttpClient)
+        .addConverterFactory(gsonConverterFactory)
+        .build()
+
+    @Provides
+    @Singleton
+    @Named("Chat")
+    fun provideRetrofitChat(
+        okHttpClient: OkHttpClient,
+        gsonConverterFactory: GsonConverterFactory
+    ): Retrofit = Retrofit.Builder()
+        .baseUrl(CHAT_URL)
         .client(okHttpClient)
         .addConverterFactory(gsonConverterFactory)
         .build()
@@ -70,8 +85,18 @@ class NetworkModule {
     @Provides
     @Singleton
     fun provideGPTAudioService(
+        @Named("Audio")
         retrofit: Retrofit
     ): GPTAudioService {
         return retrofit.create(GPTAudioService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGPTChatService(
+        @Named("Chat")
+        retrofit: Retrofit
+    ): GPTChatService {
+        return retrofit.create(GPTChatService::class.java)
     }
 }
