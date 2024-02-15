@@ -2,6 +2,7 @@ package leopardcat.studio.openaitts.viewmodel
 
 import android.content.Context
 import android.media.MediaPlayer
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,15 +38,18 @@ class MainViewModel @javax.inject.Inject constructor(
     fun makeAudio(context: Context, text: String) {
         viewModelScope.launch(Dispatchers.IO) {
             delay(1500)
-            val chatResponse = gptChatRepository.getGPTChat(
-                apiKey,
-                "application/json",
-                setApiInfo(text)
-            )
-
-            if(chatResponse != null) {
-                val destinationFile = File(context.getExternalFilesDir(null), "speech.mp3")
-                downloadAudioFile(destinationFile, chatResponse.choices[0].message.content)
+            try {
+                val chatResponse = gptChatRepository.getGPTChat(
+                    apiKey,
+                    "application/json",
+                    setApiInfo(text)
+                )
+                chatResponse.choices[0].message.content.let {
+                    val destinationFile = File(context.getExternalFilesDir(null), "speech.mp3")
+                    downloadAudioFile(destinationFile, chatResponse.choices[0].message.content)
+                }
+            } catch (e: Exception) {
+                Log.e("CHAT API ERROR", "exception : $e")
             }
         }
     }
@@ -83,32 +87,38 @@ class MainViewModel @javax.inject.Inject constructor(
     }
 
     private suspend fun downloadAudioFile(destination: File, text: String) {
-        val audioResponse = gptAudioRepository.getGPTAudio(
-            apiKey,
-            "application/json",
-            createGPTAudioRequestBody(
-                GPTAudioRequest(
-                    "tts-1",
-                    text,
-                    "alloy",
-                    "aac",
-                    0.6f
+        try {
+            val audioResponse = gptAudioRepository.getGPTAudio(
+                apiKey,
+                "application/json",
+                createGPTAudioRequestBody(
+                    GPTAudioRequest(
+                        "tts-1",
+                        text,
+                        "alloy",
+                        "aac",
+                        0.6f
+                    )
                 )
             )
-        )
 
-        withContext(Dispatchers.IO) {
-            val inputStream: InputStream = audioResponse.byteStream()
-            val outputStream = FileOutputStream(destination)
-            val buffer = ByteArray(4096)
-            var bytesRead: Int
-            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                outputStream.write(buffer, 0, bytesRead) //파일 저장
+            audioResponse.let {
+                withContext(Dispatchers.IO) {
+                    val inputStream: InputStream = audioResponse.byteStream()
+                    val outputStream = FileOutputStream(destination)
+                    val buffer = ByteArray(4096)
+                    var bytesRead: Int
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        outputStream.write(buffer, 0, bytesRead) //파일 저장
+                    }
+                    outputStream.close()
+                }
+
+                playAudioFile(destination)
             }
-            outputStream.close()
+        } catch (e: Exception) {
+            Log.e("AUDIO API ERROR", "exception : $e")
         }
-
-        playAudioFile(destination)
     }
 
     //RequestBody 제작
