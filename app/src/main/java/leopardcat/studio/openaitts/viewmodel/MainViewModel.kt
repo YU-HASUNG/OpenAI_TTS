@@ -1,8 +1,10 @@
 package leopardcat.studio.openaitts.viewmodel
 
 import android.content.Context
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,6 +38,14 @@ class MainViewModel @javax.inject.Inject constructor(
 
     //오디오 다운로드 및 재생
     fun makeAudio(context: Context, text: String) {
+
+        //미디어 볼륨 검사
+        if(isMediaVolumeZero(context)){
+            Toast.makeText(context, "미디어 볼륨을 높여 주세요!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        //채팅, audio API 시작
         viewModelScope.launch(Dispatchers.IO) {
             delay(1500)
             try {
@@ -142,6 +152,17 @@ class MainViewModel @javax.inject.Inject constructor(
             prepare()
             start()
         }
+    }
+
+    //미디어 볼륨 0이면 return
+    private fun isMediaVolumeZero(context: Context): Boolean {
+        return getMediaVolume(context) == 0
+    }
+
+    //현재 미디어 볼륨값 가져오기
+    private fun getMediaVolume(context: Context): Int {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
     }
 
     override fun onCleared() {
