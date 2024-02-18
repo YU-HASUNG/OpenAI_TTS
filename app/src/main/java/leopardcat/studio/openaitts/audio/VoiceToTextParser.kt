@@ -1,4 +1,4 @@
-package leopardcat.studio.openaitts.voicetotext
+package leopardcat.studio.openaitts.audio
 
 import android.app.Application
 import android.content.Intent
@@ -6,28 +6,20 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import leopardcat.studio.openaitts.viewmodel.MainViewModel
 
 class VoiceToTextParser(
-    private val app: Application
+    private val app: Application,
+    private val mainViewModel: MainViewModel
 ): RecognitionListener {
-
-    private val _state = MutableStateFlow(VoiceToTextParserState())
-    val state = _state.asStateFlow()
 
     private val recognizer: SpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(app)
 
     fun startListening(languageCode: String) {
-        _state.update { VoiceToTextParserState() }
+        mainViewModel.updateState(VttState.NONE, null)
 
         if(!SpeechRecognizer.isRecognitionAvailable(app)) {
-            _state.update {
-                it.copy(
-                    error = "Recognition is not available"
-                )
-            }
+            mainViewModel.updateState(VttState.ERROR, "Recognition is not available")
         }
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -43,28 +35,16 @@ class VoiceToTextParser(
         recognizer.setRecognitionListener(this)
         recognizer.startListening(intent)
 
-        _state.update {
-            it.copy(
-                isSpeaking = true
-            )
-        }
+        mainViewModel.updateAudioState(SpeakingState.USER_SPEAKING)
     }
 
     fun stopListening() {
-        _state.update {
-            it.copy(
-                isSpeaking = false
-            )
-        }
+        mainViewModel.updateAudioState(SpeakingState.NONE)
         recognizer.stopListening()
     }
 
     override fun onReadyForSpeech(p0: Bundle?) {
-        _state.update {
-            it.copy(
-                error = null
-            )
-        }
+        mainViewModel.updateState(VttState.ERROR, null)
     }
 
     override fun onBeginningOfSpeech() = Unit
@@ -73,22 +53,14 @@ class VoiceToTextParser(
     override fun onBufferReceived(p0: ByteArray?) = Unit
 
     override fun onEndOfSpeech() {
-        _state.update {
-            it.copy(
-                isSpeaking = false
-            )
-        }
+        mainViewModel.updateAudioState(SpeakingState.NONE)
     }
 
     override fun onError(error: Int) {
         if(error == SpeechRecognizer.ERROR_CLIENT) {
             return
         }
-        _state.update {
-            it.copy(
-                error = "Error: $error"
-            )
-        }
+        mainViewModel.updateState(VttState.ERROR, error.toString())
     }
 
     override fun onResults(results: Bundle?) {
@@ -96,15 +68,17 @@ class VoiceToTextParser(
             ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             ?.getOrNull(0)
             ?.let { result ->
-                _state.update {
-                    it.copy(
-                        spokenText = result
-                    )
-                }
+                mainViewModel.updateState(VttState.SPOKEN_TEXT, result)
             }
     }
 
     override fun onPartialResults(p0: Bundle?) = Unit
 
     override fun onEvent(p0: Int, p1: Bundle?) = Unit
+}
+
+enum class VttState {
+    ERROR,
+    SPOKEN_TEXT,
+    NONE
 }

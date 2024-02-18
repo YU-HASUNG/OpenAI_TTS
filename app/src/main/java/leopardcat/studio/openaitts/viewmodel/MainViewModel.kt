@@ -4,14 +4,19 @@ import android.content.Context
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.util.Log
-import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import leopardcat.studio.openaitts.audio.AudioState
+import leopardcat.studio.openaitts.audio.SpeakingState
+import leopardcat.studio.openaitts.audio.VoiceToTextState
+import leopardcat.studio.openaitts.audio.VttState
 import leopardcat.studio.openaitts.data.dto.GPTAudioRequest
 import leopardcat.studio.openaitts.data.repository.GPTAudioRepository
 import leopardcat.studio.openaitts.data.repository.GPTChatRepository
@@ -29,25 +34,27 @@ import javax.inject.Named
 class MainViewModel @javax.inject.Inject constructor(
     private val gptAudioRepository: GPTAudioRepository, //Audio
     private val gptChatRepository: GPTChatRepository, //Chat
-    @Named("ApiKey")
-    private val apiKey: String, //apiKey
+    @Named("ApiKey") private val apiKey: String //apiKey
 ) : ViewModel() {
 
     //미디어 플레이어
     private var mediaPlayer: MediaPlayer? = null
 
+    //VoiceToText State
+    private val _state = MutableStateFlow(VoiceToTextState())
+    val state = _state.asStateFlow()
+
+    //Audio State
+    private val _audioState = MutableStateFlow(AudioState())
+    val audioState = _audioState.asStateFlow()
+
     //오디오 다운로드 및 재생
     fun makeAudio(context: Context, text: String) {
 
-        //미디어 볼륨 검사
-        if(isMediaVolumeZero(context)){
-            Toast.makeText(context, "미디어 볼륨을 높여 주세요!", Toast.LENGTH_SHORT).show()
-            return
-        }
-
         //채팅, audio API 시작
         viewModelScope.launch(Dispatchers.IO) {
-            delay(1500)
+            updateAudioState(SpeakingState.AI_LOADING)
+            delay(500)
             try {
                 val chatResponse = gptChatRepository.getGPTChat(
                     apiKey,
@@ -60,6 +67,7 @@ class MainViewModel @javax.inject.Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.e("CHAT API ERROR", "exception : $e")
+                updateAudioState(SpeakingState.NONE)
             }
         }
     }
@@ -128,6 +136,7 @@ class MainViewModel @javax.inject.Inject constructor(
             }
         } catch (e: Exception) {
             Log.e("AUDIO API ERROR", "exception : $e")
+            updateAudioState(SpeakingState.NONE)
         }
     }
 
@@ -146,16 +155,27 @@ class MainViewModel @javax.inject.Inject constructor(
 
     //오디오 재생
     private fun playAudioFile(audioFile: File) {
-        mediaPlayer?.release()
-        mediaPlayer = MediaPlayer().apply {
-            setDataSource(audioFile.path)
-            prepare()
-            start()
+        try {
+            mediaPlayer?.release()
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(audioFile.path)
+                prepare()
+                start()
+                updateAudioState(SpeakingState.AI_SPEAKING)
+            }
+
+            // 재생이 끝났을 때의 이벤트 처리
+            mediaPlayer?.setOnCompletionListener {
+                updateAudioState(SpeakingState.NONE)
+            }
+        } catch (e: Exception) {
+            Log.e("PLAY AUDIO ERROR", "exception : $e")
+            updateAudioState(SpeakingState.NONE)
         }
     }
 
     //미디어 볼륨 0이면 return
-    private fun isMediaVolumeZero(context: Context): Boolean {
+    fun isMediaVolumeZero(context: Context): Boolean {
         return getMediaVolume(context) == 0
     }
 
@@ -163,6 +183,45 @@ class MainViewModel @javax.inject.Inject constructor(
     private fun getMediaVolume(context: Context): Int {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+    }
+
+    //audio state update
+    fun updateAudioState(state: SpeakingState) {
+        when(state) {
+            SpeakingState.AI_SPEAKING -> {
+                _audioState.value = AudioState(SpeakingState.AI_SPEAKING)
+            }
+            SpeakingState.AI_LOADING -> {
+                _audioState.value = AudioState(SpeakingState.AI_LOADING)
+            }
+            SpeakingState.USER_SPEAKING -> {
+                _audioState.value = AudioState(SpeakingState.USER_SPEAKING)
+            }
+            SpeakingState.NONE -> {
+                _audioState.value = AudioState(SpeakingState.NONE)
+            }
+        }
+    }
+
+    //VoiceToText State Update
+    fun updateState(vttState: VttState, value: String?) {
+        when(vttState) {
+            VttState.ERROR -> {
+                if(value == null) {
+                    _state.value = VoiceToTextState(_state.value.spokenText, null)
+                } else {
+                    _state.value = VoiceToTextState(_state.value.spokenText, "Error: $value")
+                }
+            }
+            VttState.SPOKEN_TEXT -> {
+                value?.let {
+                    _state.value = VoiceToTextState(it, _state.value.error)
+                }
+            }
+            VttState.NONE -> {
+                _state.value = VoiceToTextState()
+            }
+        }
     }
 
     override fun onCleared() {
